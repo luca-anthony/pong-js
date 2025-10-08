@@ -3,13 +3,24 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Pong</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Pong: Neon Edition</title>
+    <style>
+        body {
+            margin: 0;
+            background: black;
+            overflow: hidden;
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: #050520;
+        }
+    </style>
 </head>
 
 <body>
-    <canvas id="gameCanvas"></canvas>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
     <script src="script.js"></script>
 </body>
 
