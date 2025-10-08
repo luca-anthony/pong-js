@@ -4,7 +4,7 @@ const ctx = canvas.getContext("2d");
 const w = canvas.width;
 const h = canvas.height;
 
-let player = { x: w - 20, y: h / 2 - 50, width: 10, height: 100, speed: 7 };
+let player = { x: w - 20, y: h / 2 - 50, width: 10, height: 100, speed: 9 };
 let opponent = { x: 10, y: h / 2 - 50, width: 10, height: 100, speed: 7 };
 
 let ball = { x: w / 2, y: h / 2, size: 20, speedX: 7, speedY: 7 };
@@ -181,3 +181,4 @@ function gameLoop() {
 }
 
 gameLoop();
+
