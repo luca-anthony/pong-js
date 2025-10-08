@@ -1,157 +1,183 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-canvas.width = 800;
-canvas.height = 600;
+const w = canvas.width;
+const h = canvas.height;
+
+let player = { x: w - 20, y: h / 2 - 50, width: 10, height: 100, speed: 7 };
+let opponent = { x: 10, y: h / 2 - 50, width: 10, height: 100, speed: 7 };
+
+let ball = { x: w / 2, y: h / 2, size: 20, speedX: 7, speedY: 7 };
 
 let playerScore = 0;
-let aiScore = 0;
-let maxRounds = 10;
+let opponentScore = 0;
 let roundCount = 0;
+const maxRounds = 10;
+
 let gameActive = false;
-let aiDifficulty = 4; // how quickly AI moves (starts medium)
+
+// AI difficulty
+let aiDifficulty = 0.12;
+const aiMin = 0.05;
+const aiMax = 0.25;
+const aiStep = 0.01;
+let aiSpeed = 7;
+const aiSpeedMin = 4;
+const aiSpeedMax = 10;
+const aiMissChance = 0.15;
 
 // Sounds
-const bounceSound = new Audio("assets/bounce.mp3");
-const scoreSound = new Audio("assets/score.mp3");
-const winSound = new Audio("assets/victory.mp3");
-const loseSound = new Audio("assets/lose.mp3");
+const assetsPath = "assets/";
+const pointGain = new Audio(assetsPath + "point gained.ogg");
+const pointLost = new Audio(assetsPath + "point lost.ogg");
+const victory = new Audio(assetsPath + "victory.ogg");
+const gameLost = new Audio(assetsPath + "game lost.ogg");
+const inGame = new Audio(assetsPath + "in game.ogg");
+inGame.loop = true;
 
-// Paddles and Ball
-const paddleHeight = 100;
-const paddleWidth = 10;
-let playerY = canvas.height / 2 - paddleHeight / 2;
-let aiY = canvas.height / 2 - paddleHeight / 2;
-let ballX = canvas.width / 2;
-let ballY = canvas.height / 2;
-let ballSpeedX = 5;
-let ballSpeedY = 3;
+// Input
+let keys = {};
+document.addEventListener("keydown", e => {
+    keys[e.code] = true;
+    if (e.code === "Space") {
+        if (!gameActive && roundCount < maxRounds) {
+            gameActive = true;
+            inGame.play();
+        } else if (roundCount >= maxRounds) {
+            // reset game
+            roundCount = 0;
+            playerScore = 0;
+            opponentScore = 0;
+            aiDifficulty = 0.12;
+            aiSpeed = 7;
+            resetBall();
+            gameActive = true;
+            inGame.play();
+        }
+    }
+});
+document.addEventListener("keyup", e => keys[e.code] = false);
 
-function drawPaddle(x, y, color) {
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = color;
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, paddleWidth, paddleHeight);
+function resetBall() {
+    ball.x = w / 2 - ball.size / 2;
+    ball.y = h / 2 - ball.size / 2;
+    ball.speedX *= -1;
+    ball.speedY *= -1;
+    gameActive = false;
+    inGame.pause();
+    inGame.currentTime = 0;
 }
 
-function drawBall() {
+function drawRect(x, y, width, height, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, width, height);
+}
+
+function drawCircle(x, y, size, color) {
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(ballX, ballY, 10, 0, Math.PI * 2);
-    ctx.fillStyle = "#0ff";
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = "#0ff";
+    ctx.ellipse(x + size / 2, y + size / 2, size / 2, size / 2, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.closePath();
 }
 
-function drawText(text, x, y, size = "30px", color = "#fff") {
+function drawText(text, x, y, color, size = 48) {
     ctx.fillStyle = color;
-    ctx.font = `${size} monospace`;
-    ctx.textAlign = "center";
-    ctx.shadowBlur = 0;
+    ctx.font = `${size}px Arial`;
     ctx.fillText(text, x, y);
 }
 
-function resetBall() {
-    ballSpeedX = -ballSpeedX;
-    ballX = canvas.width / 2;
-    ballY = canvas.height / 2;
-    gameActive = false;
+function updateAI() {
+    if (ball.speedX < 0) {
+        let targetY = ball.y + ball.size / 2;
+        if (Math.random() < aiMissChance) targetY += (Math.random() * 100 - 50);
+        if (opponent.y + opponent.height / 2 < targetY) {
+            opponent.y += Math.min(aiSpeed, targetY - (opponent.y + opponent.height / 2));
+        } else {
+            opponent.y -= Math.min(aiSpeed, (opponent.y + opponent.height / 2) - targetY);
+        }
+    }
+    if (opponent.y < 0) opponent.y = 0;
+    if (opponent.y + opponent.height > h) opponent.y = h - opponent.height;
 }
 
-function moveAI() {
-    const centerAI = aiY + paddleHeight / 2;
-    if (centerAI < ballY - 35) aiY += aiDifficulty;
-    else if (centerAI > ballY + 35) aiY -= aiDifficulty;
-}
-
-function moveBall() {
+function update() {
     if (!gameActive) return;
 
-    ballX += ballSpeedX;
-    ballY += ballSpeedY;
+    // Player movement
+    if (keys["ArrowUp"]) player.y -= player.speed;
+    if (keys["ArrowDown"]) player.y += player.speed;
+    if (player.y < 0) player.y = 0;
+    if (player.y + player.height > h) player.y = h - player.height;
 
-    // Top and bottom bounce
-    if (ballY < 0 || ballY > canvas.height) {
-        ballSpeedY = -ballSpeedY;
-        bounceSound.play();
+    // AI
+    updateAI();
+
+    // Ball movement
+    ball.x += ball.speedX;
+    ball.y += ball.speedY;
+
+    if (ball.y <= 0 || ball.y + ball.size >= h) ball.speedY *= -1;
+
+    // Collisions
+    if (ball.x + ball.size >= player.x && ball.x <= player.x + player.width &&
+        ball.y + ball.size >= player.y && ball.y <= player.y + player.height) {
+        ball.speedX *= -1;
+    }
+    if (ball.x <= opponent.x + opponent.width && ball.x + ball.size >= opponent.x &&
+        ball.y + ball.size >= opponent.y && ball.y <= opponent.y + opponent.height) {
+        ball.speedX *= -1;
     }
 
-    // Left paddle
-    if (
-        ballX < 20 &&
-        ballY > playerY &&
-        ballY < playerY + paddleHeight
-    ) {
-        ballSpeedX = -ballSpeedX;
-        bounceSound.play();
-    }
-
-    // Right paddle (AI)
-    if (
-        ballX > canvas.width - 30 &&
-        ballY > aiY &&
-        ballY < aiY + paddleHeight
-    ) {
-        ballSpeedX = -ballSpeedX;
-        bounceSound.play();
-    }
-
-    // Scoring
-    if (ballX < 0) {
-        aiScore++;
-        roundCount++;
-        scoreSound.play();
-        adjustDifficulty(false);
-        resetBall();
-    } else if (ballX > canvas.width) {
+    // Score
+    if (ball.x + ball.size < 0) {
         playerScore++;
         roundCount++;
-        scoreSound.play();
-        adjustDifficulty(true);
+        aiDifficulty = Math.min(aiMax, aiDifficulty + aiStep);
+        aiSpeed = Math.min(aiSpeedMax, aiSpeed + 0.3);
+        pointGain.play();
         resetBall();
     }
-}
-
-function adjustDifficulty(playerScored) {
-    // Adaptive AI — smarter if you score, dumber if you lose
-    if (playerScored && aiDifficulty < 8) aiDifficulty += 0.5;
-    else if (!playerScored && aiDifficulty > 2) aiDifficulty -= 0.5;
+    if (ball.x > w) {
+        opponentScore++;
+        roundCount++;
+        aiDifficulty = Math.max(aiMin, aiDifficulty - aiStep);
+        aiSpeed = Math.max(aiSpeedMin, aiSpeed - 0.3);
+        pointLost.play();
+        resetBall();
+    }
 }
 
 function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Background
+    ctx.fillStyle = "#050520";
+    ctx.fillRect(0, 0, w, h);
 
-    drawPaddle(10, playerY, "#0f0");
-    drawPaddle(canvas.width - 20, aiY, "#f00");
-    drawBall();
-    drawText(`${playerScore} : ${aiScore}`, canvas.width / 2, 50);
+    // Net
+    for (let y = 0; y < h; y += 40) drawRect(w / 2 - 2, y, 4, 20, "#b400ff");
 
-    if (!gameActive && roundCount < maxRounds) {
-        drawText("Press SPACE to serve", canvas.width / 2, canvas.height / 2);
-    }
+    // Draw paddles and ball
+    drawRect(player.x, player.y, player.width, player.height, "#ff00c8");
+    drawRect(opponent.x, opponent.y, opponent.width, opponent.height, "#00c8ff");
+    drawCircle(ball.x, ball.y, ball.size, "#fff");
 
+    // Scores
+    drawText(playerScore, w / 2 + 40, 60, "#ff00c8", 74);
+    drawText(opponentScore, w / 2 - 80, 60, "#00c8ff", 74);
+
+    // Messages
+    if (!gameActive && roundCount < maxRounds) drawText("Press SPACE to Serve", w / 2 - 150, h / 2 + 100, "#fff", 48);
     if (roundCount >= maxRounds) {
-        const result =
-            playerScore > aiScore ? "YOU WIN!" : "YOU LOSE!";
-        drawText(result, canvas.width / 2, canvas.height / 2, "40px", "#0ff");
+        let msgText = playerScore > opponentScore ? "You Won!" : (opponentScore > playerScore ? "Game Over" : "Draw!");
+        drawText(msgText, w / 2 - 100, h / 2 - 50, "#fff", 64);
+        if (playerScore > opponentScore) victory.play();
+        else if (opponentScore > playerScore) gameLost.play();
     }
 }
 
 function gameLoop() {
-    moveBall();
-    moveAI();
+    update();
     draw();
     requestAnimationFrame(gameLoop);
 }
-
-document.addEventListener("keydown", (e) => {
-    if (e.code === "ArrowUp" && playerY > 0) playerY -= 8;
-    if (e.code === "ArrowDown" && playerY < canvas.height - paddleHeight)
-        playerY += 8;
-    if (e.code === "Space" && !gameActive && roundCount < maxRounds) {
-        gameActive = true;
-    }
-});
 
 gameLoop();
